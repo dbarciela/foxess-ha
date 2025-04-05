@@ -1,0 +1,11 @@
+{
+  "errno": 0,
+  "msg": "Success",
+  "result": {
+    "sn": "TEST_SN_123",
+    "datas": [
+       {"variable": "runningStatus", "value": "164", "unit": ""}
+    ],
+    "time": "2025-04-05 17:25:00"
+  }
+}

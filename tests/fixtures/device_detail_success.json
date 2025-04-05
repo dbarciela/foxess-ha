@@ -1,0 +1,16 @@
+{
+  "errno": 0,
+  "msg": "Success",
+  "result": {
+    "deviceSN": "TEST_SN_12345",
+    "plantName": "My Test Plant",
+    "moduleSN": "MODULE_SN_67890",
+    "deviceType": "H1-5.0-E",
+    "masterVersion": "1.10",
+    "slaveVersion": "1.08",
+    "managerVersion": "1.12",
+    "hasBattery": true,
+    "status": 1,
+    "lastCloudSync": "2025-04-05 17:00:00"
+  }
+}

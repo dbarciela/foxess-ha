@@ -1,0 +1,8 @@
+{
+  "errno": 0,
+  "msg": "Success",
+  "result": {
+    "minGridSoc": 20,
+    "minSoc": 15
+  }
+}

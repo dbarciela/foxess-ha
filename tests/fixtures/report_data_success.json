@@ -1,0 +1,23 @@
+{
+  "errno": 0,
+  "msg": "Success",
+  "result": {
+    "today": {
+      "generation": 15.5,
+      "feedin": 8.2,
+      "gridConsumption": 3.1,
+      "chargeEnergyToTal": 5.0,
+      "dischargeEnergyToTal": 4.5,
+      "loads": 12.1
+    },
+    "month": {
+       "generation": 250.0
+    },
+    "year": {
+       "generation": 3000.0
+    },
+    "cumulative": {
+        "generation": 15000.0
+    }
+  }
+}
