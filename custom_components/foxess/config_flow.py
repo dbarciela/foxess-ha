@@ -3,10 +3,10 @@ import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY
+# Removed import from homeassistant.const, will import from .const below
 from homeassistant.core import callback
 
-from .const import DOMAIN, CONF_DEVICE_SN
+from .const import DOMAIN, CONF_DEVICE_SN, CONF_API_KEY # Added CONF_API_KEY
 
 _LOGGER = logging.getLogger(__name__)
 

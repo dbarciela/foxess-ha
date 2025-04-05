@@ -35,6 +35,36 @@ _LOGGER = logging.getLogger(__name__)
 # (Definitions moved to definitions.py)
 
 
+def _create_sensors(
+    coordinator,
+    descriptions: list[SensorEntityDescription],
+    sensor_class: type[FoxEssEntity],
+    device_sn: str,
+    data_source_key: str,
+    data_sub_key: str | None = None, # Optional sub-key (e.g., "today" for report)
+) -> list[FoxEssEntity]:
+    """Helper to create sensor entities from descriptions."""
+    entities = []
+    source_data = coordinator.data.get(data_source_key, {})
+    if data_sub_key:
+        source_data = source_data.get(data_sub_key, {}) # Dive into sub-key if provided
+
+    if not isinstance(source_data, dict):
+        _LOGGER.warning("Expected dictionary for source '%s' (sub-key: %s), got %s",
+                        data_source_key, data_sub_key, type(source_data))
+        return [] # Cannot proceed if data structure is wrong
+
+    for description in descriptions:
+        if description.key in source_data:
+            entities.append(sensor_class(coordinator, description, device_sn))
+        else:
+            _LOGGER.debug(
+                "Skipping sensor %s for %s as key not found in initial data source '%s' (sub-key: %s)",
+                description.key, device_sn, data_source_key, data_sub_key
+            )
+    return entities
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -47,34 +77,15 @@ async def async_setup_entry(
 
     entities = []
 
-    # Create entities from raw data descriptions
-    for description in SENSOR_DESCRIPTIONS:
-        # Check if the key exists in the first update's raw data
-        # This prevents creating sensors for optional/missing values
-        if description.key in coordinator.data.get("raw", {}):
-             entities.append(FoxEssRawSensor(coordinator, description, device_sn))
-        else:
-             _LOGGER.debug("Skipping sensor %s for %s as key not found in initial data", description.key, device_sn)
+    # Create entities using the helper function
+    entities.extend(_create_sensors(coordinator, SENSOR_DESCRIPTIONS, FoxEssRawSensor, device_sn, "raw"))
 
-    # Create entities from battery settings data
     has_battery = bool(device_info_data.get("hasBattery"))
     if has_battery:
-        for description in BATTERY_SETTING_SENSORS:
-             if description.key in coordinator.data.get("battery", {}):
-                 entities.append(FoxEssBatterySettingSensor(coordinator, description, device_sn))
-             else:
-                 _LOGGER.debug("Skipping battery sensor %s for %s as key not found in initial data", description.key, device_sn)
+        entities.extend(_create_sensors(coordinator, BATTERY_SETTING_SENSORS, FoxEssBatterySettingSensor, device_sn, "battery"))
 
-    # Create entities from report data
-    # Note: Report data structure might need adjustment based on API response
-    # Assuming report data is a dict where keys match description.key and value is the energy total for today
-    today_report_data = coordinator.data.get("report", {}).get("today", {}) # Example structure, adjust as needed
-    for description in REPORT_SENSORS:
-        if description.key in today_report_data:
-             entities.append(FoxEssReportSensor(coordinator, description, device_sn))
-        else:
-             _LOGGER.debug("Skipping report sensor %s for %s as key not found in initial data", description.key, device_sn)
-
+    # Assuming report data for today is under report -> today
+    entities.extend(_create_sensors(coordinator, REPORT_SENSORS, FoxEssReportSensor, device_sn, "report", "today"))
 
     # Add inverter status sensor (example of a custom entity)
     entities.append(FoxEssInverterStatusSensor(coordinator, device_sn))
@@ -110,13 +121,27 @@ class FoxEssEntity(CoordinatorEntity, SensorEntity):
         )
 
     @property
+    def _data_source(self) -> dict | None:
+        """Return the specific data source dictionary for this entity type (e.g., raw, battery). Needs override."""
+        raise NotImplementedError
+
+    @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        # Available if coordinator is updating and the specific data key exists
-        return (
+        # Base availability check: coordinator updates, inverter online
+        base_available = (
             super().available
             and self.coordinator.data is not None
-            and self.coordinator.data.get("online", False) # Check if inverter reported online
+            and self.coordinator.data.get("online", False)
+        )
+        if not base_available:
+            return False
+
+        # Check if the specific data source exists and the key is present
+        data_source = self._data_source
+        return (
+            data_source is not None
+            and self.entity_description.key in data_source
         )
 
     def _get_data_value(self, data_key: str) -> Any | None:
@@ -144,36 +169,32 @@ class FoxEssEntity(CoordinatorEntity, SensorEntity):
 
 class FoxEssRawSensor(FoxEssEntity):
     """Sensor reading data from the 'raw' part of the coordinator data."""
+    @property
+    def _data_source(self) -> dict | None:
+        """Return the 'raw' data dictionary."""
+        return self.coordinator.data.get("raw")
+
     def _get_data_value(self, data_key: str) -> Any | None:
         """Get value from the 'raw' data dictionary."""
-        return self.coordinator.data.get("raw", {}).get(data_key)
+        source = self._data_source
+        return source.get(data_key) if source else None
 
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        # Check base availability and if the specific key exists in raw data
-        return (
-            super().available
-            and self.coordinator.data.get("raw") is not None
-            and self.entity_description.key in self.coordinator.data["raw"]
-        )
+    # available property now handled by base class + _data_source check
 
 
 class FoxEssBatterySettingSensor(FoxEssEntity):
     """Sensor reading data from the 'battery' part of the coordinator data."""
+    @property
+    def _data_source(self) -> dict | None:
+        """Return the 'battery' data dictionary."""
+        return self.coordinator.data.get("battery")
+
     def _get_data_value(self, data_key: str) -> Any | None:
         """Get value from the 'battery' data dictionary."""
-        return self.coordinator.data.get("battery", {}).get(data_key)
+        source = self._data_source
+        return source.get(data_key) if source else None
 
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        # Check base availability and if the specific key exists in battery data
-        return (
-            super().available
-            and self.coordinator.data.get("battery") is not None
-            and self.entity_description.key in self.coordinator.data["battery"]
-        )
+    # available property now handled by base class + _data_source check
 
 
 class FoxEssReportSensor(FoxEssEntity):
@@ -181,59 +202,65 @@ class FoxEssReportSensor(FoxEssEntity):
     # This assumes the report data for 'today' is structured appropriately
     # Adjust the key access logic if the API response structure is different
 
-    def _get_data_value(self, data_key: str) -> Any | None:
-        """Get value from the 'report' data dictionary (assuming today's data)."""
-        # Example: Accessing today's value for the specific key
-        # Adjust ".get('today', {})" based on actual API response structure
-        return self.coordinator.data.get("report", {}).get("today", {}).get(data_key)
-
     @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        # Check base availability and if the specific key exists in report data
-        return (
-            super().available
-            and self.coordinator.data.get("report") is not None
-            and self.coordinator.data["report"].get("today") is not None # Check if today's data exists
-            and self.entity_description.key in self.coordinator.data["report"]["today"]
-        )
+    def _data_source(self) -> dict | None:
+        """Return the 'report' -> 'today' data dictionary."""
+        # Adjust if the structure is different
+        report_data = self.coordinator.data.get("report")
+        return report_data.get("today") if isinstance(report_data, dict) else None
+
+    def _get_data_value(self, data_key: str) -> Any | None:
+        """Get value from the 'report' -> 'today' data dictionary."""
+        source = self._data_source
+        return source.get(data_key) if source else None
+
+    # available property now handled by base class + _data_source check
 
 
 # --- Example Custom Sensor (Not using EntityDescription) ---
-class FoxEssInverterStatusSensor(CoordinatorEntity, SensorEntity):
+class FoxEssInverterStatusSensor(FoxEssEntity): # Inherit from FoxEssEntity
     """Representation of the Inverter Status."""
 
     _attr_has_entity_name = True
     _attr_name = "Inverter Status"
     _attr_icon = "mdi:solar-power" # Or mdi:information-outline
 
+    # Note: This sensor doesn't use an EntityDescription like the others
+    # We still call the base __init__ but don't need the description param here.
+    # We manually set the unique_id and other attributes.
+    _attr_entity_description = None # Indicate no description is used
+
     def __init__(self, coordinator, device_sn: str):
         """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._device_sn = device_sn
+        # Call super().__init__ without description
+        # Need to handle the missing description in the base or bypass parts of it.
+        # Let's call CoordinatorEntity.__init__ directly and set necessary attrs.
+        CoordinatorEntity.__init__(self, coordinator)
+        # SensorEntity doesn't have an __init__ to call directly.
+
+        self._device_sn = device_sn # Needed for device_info from FoxEssEntity
         self._attr_unique_id = f"{device_sn}_inverter_status"
+        # _attr_name and _attr_icon are set as class attributes
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information."""
-        # Fetch device details stored during __init__.py setup
-        device_info_data = self.coordinator.hass.data[DOMAIN][self.coordinator.config_entry.entry_id][DEVICE_INFO_DATA]
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._device_sn)},
-            # Link to the same device as other sensors
-            # name, manufacturer, model, sw_version will be inherited from device registry
-        )
+    # No need to define entity_description property
 
+    # device_info is now correctly inherited from FoxEssEntity
+
+    # This sensor's availability depends on a specific key ('runningStatus')
+    # in a specific source ('raw'), not tied to an entity_description.key.
+    # So we override the base 'available' logic.
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return (
-            super().available
-            and self.coordinator.data is not None
-            and self.coordinator.data.get("online", False)
-            and self.coordinator.data.get("raw") is not None
-            and "runningStatus" in self.coordinator.data["raw"] # Check if status key exists
-        )
+        # Check base coordinator/online status first
+        if not CoordinatorEntity.available.fget(self): # Check CoordinatorEntity availability
+             return False
+        if not self.coordinator.data or not self.coordinator.data.get("online", False):
+             return False
+
+        # Then check for the specific key required by this sensor
+        raw_data = self.coordinator.data.get("raw")
+        return raw_data is not None and "runningStatus" in raw_data
 
     @property
     def native_value(self) -> str | None:
