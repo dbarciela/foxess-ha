@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import time
+# import secrets # Removed nonce generation
 from datetime import datetime
 
 import aiohttp
@@ -12,7 +13,7 @@ import aiohttp
 _ENDPOINT_OA_DOMAIN = "https://www.foxesscloud.com"
 _ENDPOINT_OA_BATTERY_SETTINGS = "/op/v0/device/battery/soc/get" # Removed ?sn=
 _ENDPOINT_OA_REPORT = "/op/v0/device/report/query"
-_ENDPOINT_OA_DEVICE_DETAIL = "/op/v0/device/detail" # Removed ?sn=
+_ENDPOINT_OA_DEVICE_DETAIL = "/op/v0/device/detail" # Path for URL and signature (matches old code)
 _ENDPOINT_OA_DEVICE_VARIABLES = "/op/v0/device/real/query"
 _ENDPOINT_OA_DAILY_GENERATION = "/op/v0/device/generation" # Removed ?sn=
 
@@ -21,7 +22,7 @@ METHOD_POST = "POST"
 METHOD_GET = "GET"
 DEFAULT_ENCODING = "UTF-8"
 # Using a fixed user agent for now, random one can be added if needed
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36" # Match old code example
 DEFAULT_TIMEOUT = 75  # API can be slow
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,25 +67,30 @@ class FoxEssApiClient:
     def _get_signature(self, path: str, lang: str = "en") -> str:
         """Generate the API request signature."""
         timestamp = str(round(time.time() * 1000))
-        nonce = self._md5c(str(round(time.time() * 1000)))
-        signature_plain = f"{path}\r\n{self._token}\r\n{timestamp}" # Removed nonce based on OpenAPI doc example
+        # Nonce is not used in hash calculation or headers in the working version
+        # nonce = secrets.token_hex(16) # Removed nonce generation
+        # Hash calculation matches working version (path + token + timestamp)
+        signature_plain = rf"{path}\r\n{self._token}\r\n{timestamp}" # Use raw f-string like old code/doc example
         signature = self._md5c(signature_plain)
 
+        # Headers match working version EXACTLY (includes token, excludes nonce, excludes Accept, includes Connection: close)
         headers = {
             "User-Agent": USER_AGENT,
             "token": self._token,
             "timestamp": timestamp,
-            "nonce": nonce,
+            # "nonce": nonce, # Nonce not sent in old code
             "signature": signature,
             "Content-Type": "application/json",
-            "Accept": "application/json, text/plain, */*",
+            # "Accept": "application/json, text/plain, */*", # Accept not sent in old code
             "lang": lang,
+            "Connection": "close", # Connection: close was sent in old code
         }
         return headers
 
     async def _request(self, method: str, path: str, params: dict | None = None, data: dict | None = None) -> dict:
         """Make an API request."""
-        url = f"{_ENDPOINT_OA_DOMAIN}{path}"
+        url = f"{_ENDPOINT_OA_DOMAIN}{path}" # URL for request uses base path
+        # Generate signature using the base path (matches old code)
         headers = self._get_signature(path)
         _LOGGER.debug("Sending %s request to %s with params %s and data %s", method, url, params, data)
 
@@ -139,6 +145,7 @@ class FoxEssApiClient:
 
     async def get_device_detail(self) -> dict:
         """Fetch device details."""
+        # Pass params to _request, which will now use them to construct the full path for signature
         params = {"sn": self._device_sn}
         return await self._request(METHOD_GET, _ENDPOINT_OA_DEVICE_DETAIL, params=params)
 
