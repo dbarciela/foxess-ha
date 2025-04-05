@@ -67,7 +67,7 @@ class FoxEssApiClient:
         """Generate the API request signature."""
         timestamp = str(round(time.time() * 1000))
         nonce = self._md5c(str(round(time.time() * 1000)))
-        signature_plain = f"{path}\\r\\n{self._token}\\r\\n{nonce}\\r\\n{timestamp}"
+        signature_plain = f"{path}\r\n{self._token}\r\n{timestamp}" # Removed nonce based on OpenAPI doc example
         signature = self._md5c(signature_plain)
 
         headers = {
