@@ -26,9 +26,10 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import COORDINATOR, DOMAIN, CONF_DEVICE_SN, DEVICE_INFO_DATA
+from .const import COORDINATOR, DOMAIN, CONF_DEVICE_SN, DEVICE_INFO_DATA, CONF_EXTPV # Added CONF_EXTPV
 from .api import FoxEssApiClient # Although not used directly here, good for context
-from .definitions import SENSOR_DESCRIPTIONS, BATTERY_SETTING_SENSORS, REPORT_SENSORS
+# Assuming EXTENDED_PV_SENSOR_DESCRIPTIONS is defined in definitions.py
+from .definitions import SENSOR_DESCRIPTIONS, BATTERY_SETTING_SENSORS, REPORT_SENSORS, EXTENDED_PV_SENSOR_DESCRIPTIONS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,8 +85,17 @@ async def async_setup_entry(
     if has_battery:
         entities.extend(_create_sensors(coordinator, BATTERY_SETTING_SENSORS, FoxEssBatterySettingSensor, device_sn, "battery"))
 
-    # Assuming report data for today is under report -> today
-    entities.extend(_create_sensors(coordinator, REPORT_SENSORS, FoxEssReportSensor, device_sn, "report", "today"))
+    # Report data for today is now processed by the coordinator and stored directly under "report"
+    entities.extend(_create_sensors(coordinator, REPORT_SENSORS, FoxEssReportSensor, device_sn, "report"))
+
+    # Conditionally add extended PV sensors based on options
+    extend_pv = entry.options.get(CONF_EXTPV, False)
+    if extend_pv:
+        _LOGGER.debug("Adding extended PV sensors (PV5-18) based on options")
+        # Note: PV5/6 might overlap with SENSOR_DESCRIPTIONS depending on definition file,
+        # _create_sensors should handle duplicates gracefully if keys match.
+        # Assuming EXTENDED_PV_SENSOR_DESCRIPTIONS covers PV5-18 or similar range.
+        entities.extend(_create_sensors(coordinator, EXTENDED_PV_SENSOR_DESCRIPTIONS, FoxEssRawSensor, device_sn, "raw"))
 
     # Add inverter status sensor (example of a custom entity)
     entities.append(FoxEssInverterStatusSensor(coordinator, device_sn))
@@ -103,7 +113,10 @@ class FoxEssEntity(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._device_sn = device_sn
-        self._attr_unique_id = f"{device_sn}_{description.key}"
+        # Use the config entry's unique ID (either legacy deviceID or new deviceSN)
+        # as the base for the sensor's unique ID to ensure continuity.
+        config_entry_unique_id = coordinator.config_entry.unique_id
+        self._attr_unique_id = f"{config_entry_unique_id}_{description.key}"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -204,13 +217,15 @@ class FoxEssReportSensor(FoxEssEntity):
 
     @property
     def _data_source(self) -> dict | None:
-        """Return the 'report' -> 'today' data dictionary."""
-        # Adjust if the structure is different
+        """Return the 'report' data dictionary (processed for today in coordinator)."""
+        # The coordinator's _async_update_data now processes the report list
+        # and stores today's values directly in the 'report' key.
         report_data = self.coordinator.data.get("report")
-        return report_data.get("today") if isinstance(report_data, dict) else None
+        return report_data if isinstance(report_data, dict) else None
 
     def _get_data_value(self, data_key: str) -> Any | None:
-        """Get value from the 'report' -> 'today' data dictionary."""
+        """Get value from the processed 'report' data dictionary."""
+        # Access the already processed report data for today
         source = self._data_source
         return source.get(data_key) if source else None
 
@@ -239,61 +254,58 @@ class FoxEssInverterStatusSensor(FoxEssEntity): # Inherit from FoxEssEntity
         # SensorEntity doesn't have an __init__ to call directly.
 
         self._device_sn = device_sn # Needed for device_info from FoxEssEntity
-        self._attr_unique_id = f"{device_sn}_inverter_status"
+        config_entry_unique_id = coordinator.config_entry.unique_id
+        self._attr_unique_id = f"{config_entry_unique_id}_inverter_status"
         # _attr_name and _attr_icon are set as class attributes
 
     # No need to define entity_description property
 
     # device_info is now correctly inherited from FoxEssEntity
 
-    # This sensor's availability depends on a specific key ('runningStatus')
-    # in a specific source ('raw'), not tied to an entity_description.key.
-    # So we override the base 'available' logic.
+    # This sensor's availability depends on the 'status' key in 'device_info'
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        # Check base coordinator/online status first
+        # Check base coordinator status first
         if not CoordinatorEntity.available.fget(self): # Check CoordinatorEntity availability
              return False
-        if not self.coordinator.data or not self.coordinator.data.get("online", False):
+        if not self.coordinator.data:
              return False
 
-        # Then check for the specific key required by this sensor
-        raw_data = self.coordinator.data.get("raw")
-        return raw_data is not None and "runningStatus" in raw_data
+        # Then check for the specific key required by this sensor in device_info
+        device_info_data = self.coordinator.data.get("device_info")
+        return device_info_data is not None and "status" in device_info_data
 
     @property
     def native_value(self) -> str | None:
-        """Return the state of the sensor."""
-        raw_data = self.coordinator.data.get("raw", {})
-        status_code = raw_data.get("runningStatus")
+        """Return the state of the sensor based on device_info status."""
+        device_info_data = self.coordinator.data.get("device_info", {})
+        status_code = device_info_data.get("status") # Use status from device_info
 
-        # Map status codes to human-readable names (example)
+        # Map status codes based on observed API response and old code logic
+        # 1: online, 2: alarm, 3: offline
         status_map = {
-            "164": "Off-Grid", # From original code comment
-            # Add other known status codes from API documentation
-            "0": "Waiting",
-            "1": "Normal",
-            "2": "Fault",
-            "3": "Permanent Fault",
-            "4": "Updating",
-            # ...
+            1: "Online",
+            2: "Alarm", # Treat alarm as a distinct status
+            3: "Offline",
         }
-        return status_map.get(str(status_code), f"Unknown ({status_code})")
+        # Use status_code directly as it's an integer
+        return status_map.get(status_code, f"Unknown ({status_code})")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return additional state attributes."""
         attrs = {}
         raw_data = self.coordinator.data.get("raw", {})
-        device_detail = self.coordinator.data.get("device_detail", {})
+        device_info_data = self.coordinator.data.get("device_info", {}) # Use correct key
 
         # Add relevant attributes from raw data or device detail
-        attrs["raw_status_code"] = raw_data.get("runningStatus")
-        attrs["last_cloud_sync"] = device_detail.get("lastCloudSync") # From original code
+        attrs["device_status_code"] = device_info_data.get("status") # Add the code used for state
+        attrs["raw_running_status"] = raw_data.get("runningStatus") # Keep raw status if needed
+        # attrs["last_cloud_sync"] = device_info_data.get("lastCloudSync") # Not available in API response
         # Add other potentially useful attributes like invStatus, dspStatus etc.
         attrs["inv_status"] = raw_data.get("invStatus")
         attrs["dsp_status"] = raw_data.get("dspStatus")
-        attrs["sys_status"] = raw_data.get("sysStatus") # From raw data keys
+        attrs["sys_status"] = raw_data.get("sysStatus")
 
         return attrs

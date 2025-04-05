@@ -23,65 +23,41 @@ Copy the content of this integrations `custom_components/foxess` folder into you
 
 ## 💾 Configuration
 
-Edit your home-assistant `/configuration.yaml`  and add:
+Configuration is handled via the Home Assistant UI (Config Flow). YAML configuration under the `sensor:` key is no longer used for setting up new instances, but existing YAML configurations will be imported automatically to preserve history.
 
-```yaml
-sensor:
-  - platform: foxess
-    deviceID: enter_your_inverter_id
-    deviceSN: enter_your_inverter_serial_number
-    apiKey: enter_your_personal_api_key
-```
+**Adding the Integration (New Users):**
 
-#### Auxiliary notes:
-- `username & password` are no longer required for this integration, it uses your_personal_api_key instead.
+1.  Go to **Settings** -> **Devices & Services**.
+2.  Click **Add Integration**.
+3.  Search for "FoxESS Cloud" and select it.
+4.  Enter your **API Key** and **Device SN** (Inverter Serial Number).
+    *   **API Key:** Generate this from the 'API Management' section of your profile on the [Foxesscloud.com](https://www.foxesscloud.com/) website.
+    *   **Device SN:** Find this under 'Device' -> 'Inverter' on the [Foxesscloud.com](https://www.foxesscloud.com/) website (e.g., `60BHnnnnnnXnnn`).
+5.  Click **Submit**. The integration will be set up using your **Device SN** as the unique identifier.
 
-- `your_inverter_serial_number` is the serial number of the inverter this integration will be gathering data from, you can see the deviceSN by logging into the Foxesscloud.com website, in the left hand menu click on 'Device', then 'Inverter' this will display a table and your Inverter SN - the format will be similar to : 60BHnnnnnnXnnn - copy and paste this into the config setting deviceSN: replacing the text `foxesscloud_inverter_serial_number`
+**Existing YAML Users (Migration):**
 
-- `your_personal_api_key` is a personal api_key that is generated in your profile selection of your Foxesscloud account. To do this log into the Foxesscloud.com website, click on the 'profile icon' in the top right corner and select 'User Profile'. Then on the menu on the left hand side select 'API Management' and click 'Generate API Key, the long string that it generates should be copied and pasted into the platform config setting of your configuration.yaml apiKey: replacing the text `foxesscloud_personal_api_key` (see example above).
+If you previously configured this integration using `configuration.yaml` under the `sensor:` key:
+1.  **Update** the integration via HACS or manually.
+2.  **Restart** Home Assistant.
+3.  Home Assistant should automatically detect your existing setup and show a notification prompting you to import the configuration. Click **Configure** or **Submit** on the notification.
+4.  The import process uses your **legacy `deviceID`** from your YAML file as the unique identifier for the integration entry. **This is crucial for preserving your existing entity history.**
+    *   **Finding your legacy `deviceID` (if needed):** If you need to find your old `deviceID` for reference, it was typically found in the URL when viewing the Inverter Details page on the FoxESS Cloud website (often a long alphanumeric string between `%2522` characters, as shown in the image below).
+    ![Legacy deviceID location](https://github.com/macxq/foxess-ha/assets/123640536/1e024286-7215-4bab-8e7d-5dfe5e719275)
+5.  Any options like `extendPV: true` from your YAML config will also be imported automatically.
+6.  After successful import, you can safely **remove** the FoxESS configuration from your `configuration.yaml` file.
 
-- `your_inverter_id` ⚠️  Please note the inverter_id requirement has changed and the deviceID is only required for legacy installations installed prior to the OpenAPI being introduced, for these older installations do not remove it as it will affect your entity history and follow the notes for legacy installations below.
+**Options (After Setup):**
 
-   **For new 'OpenAPI' installations, follow these instructions:**
+Once the integration is added (either via UI or import), you can configure additional options:
+1.  Go to **Settings** -> **Devices & Services**.
+2.  Find the FoxESS Cloud integration card for your inverter and click **Configure**.
+3.  **Extend PV:** Check this box if you have an inverter that supports more than 4 PV strings (e.g., Fox R series) to enable sensors for PV strings 5-18. Click **Submit** to save. The integration will automatically reload to apply the change.
 
-    For all new OpenAPI installs (since March 2024) simply re-use your unique inverter_serial_number `deviceSN:` in the `deviceID:` (i.e. you would enter your inverter serial number in both of these fields)
-   i.e. it would look like this:
-   ```yaml
-   sensor:
-     - platform: foxess
-       deviceID: enter_your_inverter_serial_number
-       deviceSN: enter_your_inverter_serial_number
-       apiKey: enter_your_personal_api_key
-   ```
+**Multi-Inverter Support:**
 
-
-   For **legacy installations only** you must continue to use the inverter_id as it sets the unique_id for the entities and it will delete your entity history if it is changed.
-   It can be found in the UUID on the foxesscloud in the url path of the `Inverter Details` page; make sure that this is exact value from inverter details page address between the %2522 and %2522 characters:
-![112](https://github.com/macxq/foxess-ha/assets/123640536/1e024286-7215-4bab-8e7d-5dfe5e719275)
-
-- Fox R series or inverters with more than 6 PV strings - if you have an inverter that supports more than 16 PV strings, please add the following switch `extendPV: true` to your platform config and the integration will attempt to read PV strings 7-18 volts, current power sensors.
-   ```
-       deviceID: enter_your_inverter_serial_number
-       deviceSN: enter_your_inverter_serial_number
-       apiKey: enter_your_personal_api_key
-       extendPV: true
-   ```
-
-
-- Multi-inverter support - if you have more than one FoxESS device in your installation, you can leverage the optional `name` field in your config,
-   ```
-   sensor:
-     - platform: foxess
-       name: Fox1
-       deviceID: enter_your_inverter_id_1
-       deviceSN: enter_your_inverter_serial_number_1
-       apiKey: enter_your_personal_api_key_1
-     - platform: foxess
-       name: Fox2
-       deviceID: enter_your_inverter_id_2
-       deviceSN: enter_your_inverter_serial_number_2
-       apiKey: enter_your_personal_api_key_2
-   ```
+*   To add multiple inverters, simply repeat the "Add Integration" process via the UI for each inverter, providing its unique **Device SN** and your **API Key**.
+*   Home Assistant allows you to rename devices and entities via the UI if desired after setup.
  
 
 

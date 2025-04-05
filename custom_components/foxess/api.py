@@ -176,8 +176,8 @@ class FoxEssApiClient:
         # Assuming it defaults to today if not specified
         return await self._request(METHOD_GET, _ENDPOINT_OA_DAILY_GENERATION, params=params)
 
-    async def get_raw_data(self, variables: list | None = None) -> dict:
-        """Fetch real-time inverter data."""
+    async def get_raw_data(self, extend_pv: bool = False, variables: list | None = None) -> dict:
+        """Fetch real-time inverter data. Optionally include extended PV strings."""
         # Default variables if none provided (based on original code's usage)
         if variables is None:
              variables = [
@@ -199,13 +199,47 @@ class FoxEssApiClient:
                 "SVolt", "sysStatus", "TCurrent", "TFreq", "TPower", "TVolt",
                 "currentFault" # Add fault code variable
             ]
-            # Add extended PV strings if needed (based on original CONF_EXTPV)
-            # This should ideally be passed based on config
-            # for i in range(5, 19):
-            #     variables.extend([f"pv{i}Current", f"pv{i}Power", f"pv{i}Volt"])
+        # Add extended PV strings if extend_pv is True, regardless of whether default or custom variables were used
+        # Ensure variables is a list before extending
+        if not isinstance(variables, list):
+             _LOGGER.warning("Variables provided to get_raw_data is not a list, cannot extend PV.")
+             variables = [] # Prevent error, though this might hide a problem
+        if extend_pv:
+            _LOGGER.debug("Including extended PV variables (5-18)")
+            for i in range(5, 19): # Assuming PV strings are 1-18 max
+                # Avoid adding duplicates if user provided some extended vars already
+                pv_current = f"pv{i}Current"
+                pv_power = f"pv{i}Power"
+                pv_volt = f"pv{i}Volt"
+                if pv_current not in variables: variables.append(pv_current)
+                if pv_power not in variables: variables.append(pv_power)
+                if pv_volt not in variables: variables.append(pv_volt)
 
         payload = {
             "sn": self._device_sn,
             "variables": json.dumps(variables) # API expects a JSON string here
         }
-        return await self._request(METHOD_POST, _ENDPOINT_OA_DEVICE_VARIABLES, data=payload)
+        # The API returns a list containing one dictionary with 'datas' and 'time'
+        # Process this to return just the dictionary of variable:value pairs
+        result_list = await self._request(METHOD_POST, _ENDPOINT_OA_DEVICE_VARIABLES, data=payload)
+
+        processed_data = {}
+        if result_list and isinstance(result_list, list) and len(result_list) > 0:
+            # API seems to wrap the actual data inside a list -> result -> datas
+            # Let's adjust based on the structure observed in previous debugging if needed
+            # Assuming the structure is like: [{'datas': [{'variable': 'x', 'value': 1}, ...], 'time': '...'}]
+            first_item = result_list[0]
+            if isinstance(first_item, dict) and 'datas' in first_item:
+                 datas_list = first_item.get('datas', [])
+                 if isinstance(datas_list, list):
+                      for item in datas_list:
+                           if isinstance(item, dict) and 'variable' in item and 'value' in item:
+                                processed_data[item['variable']] = item['value']
+                 # Optionally add 'time' if needed elsewhere, though sensors usually rely on HA's update time
+                 # processed_data['api_time'] = first_item.get('time')
+            else:
+                 _LOGGER.warning("Unexpected structure in get_raw_data response list item: %s", first_item)
+        else:
+             _LOGGER.warning("Unexpected or empty response structure from get_raw_data: %s", result_list)
+
+        return processed_data # Return the processed dictionary
