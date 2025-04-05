@@ -56,7 +56,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     # Create Device Registry Entry
-    device_registry = hass.helpers.device_registry.async_get(hass)
+    device_registry = hass.helpers.device_registry.async_get()
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, device_sn)},
