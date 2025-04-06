@@ -4,8 +4,9 @@ DOMAIN = "foxess"
 
 # Configuration Keys
 CONF_DEVICE_SN = "deviceSN"
-CONF_API_KEY = "apiKey" # Matches the key used in PLATFORM_SCHEMA and config_flow
-
+CONF_API_KEY = "apiKey"
+CONF_DEVICE_ID = "deviceID" # Legacy ID, used for import unique_id
+CONF_EXTPV = "extendPV" # Option for extended PV sensors
 # Default Values
 DEFAULT_NAME = "FoxESS"
 
