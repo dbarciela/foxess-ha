@@ -6,8 +6,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME # Needed for title, though not configurable here
 from homeassistant.core import callback
 from homeassistant.helpers import selector
-from .const import DOMAIN, CONF_DEVICE_SN, CONF_API_KEY, CONF_EXTPV, CONF_DEVICE_ID # Added CONF_DEVICE_ID
-from .const import DOMAIN, CONF_DEVICE_SN, CONF_API_KEY, CONF_EXTPV # Added CONF_EXTPV
+from .const import DOMAIN, CONF_DEVICE_SN, CONF_API_KEY, CONF_EXTPV, CONF_DEVICE_ID # Combined imports
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,7 +17,32 @@ DATA_SCHEMA = vol.Schema(
     }
 )
 
+# Define Options Flow Handler FIRST
+class FoxESSOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle FoxESS options."""
 
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(self, user_input: dict | None = None) -> config_entries.FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Update the config entry's options
+            return self.async_create_entry(title="", data=user_input)
+
+        # Get current options or defaults
+        extend_pv = self.config_entry.options.get(CONF_EXTPV, False)
+
+        options_schema = vol.Schema(
+            {
+                vol.Optional(CONF_EXTPV, default=extend_pv): selector.BooleanSelector(),
+            }
+        )
+
+        return self.async_show_form(step_id="init", data_schema=options_schema)
+
+# Define Config Flow Handler SECOND
 class FoxESSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for FoxESS Cloud."""
 
@@ -51,31 +75,6 @@ class FoxESSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FoxESSOptionsFlowHandler:
         """Get the options flow for this handler."""
         return FoxESSOptionsFlowHandler(config_entry)
-
-
-class FoxESSOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle FoxESS options."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input: dict | None = None) -> config_entries.FlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            # Update the config entry's options
-            return self.async_create_entry(title="", data=user_input)
-
-        # Get current options or defaults
-        extend_pv = self.config_entry.options.get(CONF_EXTPV, False)
-
-        options_schema = vol.Schema(
-            {
-                vol.Optional(CONF_EXTPV, default=extend_pv): selector.BooleanSelector(),
-            }
-        )
-
-        return self.async_show_form(step_id="init", data_schema=options_schema)
 
     async def async_step_import(self, import_data: dict | None = None) -> config_entries.FlowResult:
         """Handle import from configuration.yaml."""
