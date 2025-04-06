@@ -217,7 +217,7 @@ class FoxEssApiClient:
 
         payload = {
             "sn": self._device_sn,
-            "variables": json.dumps(variables) # API expects a JSON string here
+            "variables": variables # Pass the list directly, aiohttp will encode the payload
         }
         # The API returns a list containing one dictionary with 'datas' and 'time'
         # Process this to return just the dictionary of variable:value pairs
