@@ -161,8 +161,9 @@ class FoxEssApiClient:
             "sn": self._device_sn,
             "year": datetime.now().year,
             "month": datetime.now().month,
-            "dimension": "day", # Fetch daily data for the current month
-            "variableNames": ["generation", "feedin", "gridConsumption", "chargeEnergyToTal", "dischargeEnergyToTal", "loads"]
+            "day": datetime.now().day, # Add day parameter, seems required when dimension="day"
+            "dimension": "day", # Fetch daily data for current month
+            "variables": ["generation", "feedin", "gridConsumption", "chargeEnergyToTal", "dischargeEnergyToTal", "loads"]
         }
         # This endpoint seems to return data for the whole month when dimension=day
         # Or whole year when dimension=month. Let's fetch daily for current month.
