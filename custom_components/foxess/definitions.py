@@ -101,3 +101,18 @@ REPORT_SENSORS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(key="loads", name="Energy Load Today", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR, device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.TOTAL_INCREASING),
     # Add Month / Cumulative if API provides them consistently
 )
+
+# Descriptions for optional extended PV sensors (PV5-PV18)
+# These are added dynamically based on the 'extendPV' option
+EXTENDED_PV_SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = tuple(
+    [
+        SensorEntityDescription(key=f"pv{i}Power", name=f"PV{i} Power", native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT)
+        for i in range(5, 19) # Assuming max 18 strings
+    ] + [
+        SensorEntityDescription(key=f"pv{i}Volt", name=f"PV{i} Voltage", native_unit_of_measurement=UnitOfElectricPotential.VOLT, device_class=SensorDeviceClass.VOLTAGE, state_class=SensorStateClass.MEASUREMENT)
+        for i in range(5, 19)
+    ] + [
+        SensorEntityDescription(key=f"pv{i}Current", name=f"PV{i} Current", native_unit_of_measurement=UnitOfElectricCurrent.AMPERE, device_class=SensorDeviceClass.CURRENT, state_class=SensorStateClass.MEASUREMENT)
+        for i in range(5, 19)
+    ]
+)
