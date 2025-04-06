@@ -61,7 +61,7 @@ SENSOR_DESCRIPTIONS: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(key="batChargePower", name="Battery Charge Power", native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT),
     SensorEntityDescription(key="loadsPower", name="Load Power", native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT),
     SensorEntityDescription(key="meterPower2", name="Meter Power 2", native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT), # Check unit/class
-    SensorEntityDescription(key="reactivePower", name="Reactive Power", native_unit_of_measurement=UnitOfReactivePower.VAR, device_class=SensorDeviceClass.REACTIVE_POWER, state_class=SensorStateClass.MEASUREMENT),
+    SensorEntityDescription(key="reactivePower", name="Reactive Power", native_unit_of_measurement=UnitOfReactivePower.VOLT_AMPERE_REACTIVE, device_class=SensorDeviceClass.REACTIVE_POWER, state_class=SensorStateClass.MEASUREMENT),
 
     # Battery Sensors
     SensorEntityDescription(key="SoC", name="Battery SoC", native_unit_of_measurement=PERCENTAGE, device_class=SensorDeviceClass.BATTERY, state_class=SensorStateClass.MEASUREMENT),
