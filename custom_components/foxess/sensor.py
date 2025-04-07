@@ -28,8 +28,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import COORDINATOR, DOMAIN, CONF_DEVICE_SN, DEVICE_INFO_DATA, CONF_EXTPV # Added CONF_EXTPV
 from .api import FoxEssApiClient # Although not used directly here, good for context
-# Assuming EXTENDED_PV_SENSOR_DESCRIPTIONS is defined in definitions.py
-from .definitions import SENSOR_DESCRIPTIONS, BATTERY_SETTING_SENSORS, REPORT_SENSORS, EXTENDED_PV_SENSOR_DESCRIPTIONS
+# EXTENDED_PV_SENSOR_DESCRIPTIONS removed from import
+from .definitions import SENSOR_DESCRIPTIONS, BATTERY_SETTING_SENSORS, REPORT_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,11 +91,18 @@ async def async_setup_entry(
     # Conditionally add extended PV sensors based on options
     extend_pv = entry.options.get(CONF_EXTPV, False)
     if extend_pv:
-        _LOGGER.debug("Adding extended PV sensors (PV5-18) based on options")
-        # Note: PV5/6 might overlap with SENSOR_DESCRIPTIONS depending on definition file,
-        # _create_sensors should handle duplicates gracefully if keys match.
-        # Assuming EXTENDED_PV_SENSOR_DESCRIPTIONS covers PV5-18 or similar range.
-        entities.extend(_create_sensors(coordinator, EXTENDED_PV_SENSOR_DESCRIPTIONS, FoxEssRawSensor, device_sn, "raw"))
+        _LOGGER.debug("Adding extended PV sensors (PV5-18) directly based on options")
+        # Create extended PV sensors directly, mirroring old code structure
+        for i in range(5, 19): # Assuming max 18 strings like old code
+            # Create Power Sensor
+            power_desc = SensorEntityDescription(key=f"pv{i}Power", name=f"PV{i} Power", native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT)
+            entities.append(FoxEssRawSensor(coordinator, power_desc, device_sn))
+            # Create Volt Sensor
+            volt_desc = SensorEntityDescription(key=f"pv{i}Volt", name=f"PV{i} Voltage", native_unit_of_measurement=UnitOfElectricPotential.VOLT, device_class=SensorDeviceClass.VOLTAGE, state_class=SensorStateClass.MEASUREMENT)
+            entities.append(FoxEssRawSensor(coordinator, volt_desc, device_sn))
+            # Create Current Sensor
+            current_desc = SensorEntityDescription(key=f"pv{i}Current", name=f"PV{i} Current", native_unit_of_measurement=UnitOfElectricCurrent.AMPERE, device_class=SensorDeviceClass.CURRENT, state_class=SensorStateClass.MEASUREMENT)
+            entities.append(FoxEssRawSensor(coordinator, current_desc, device_sn))
 
     # Add inverter status sensor (example of a custom entity)
     entities.append(FoxEssInverterStatusSensor(coordinator, device_sn))
